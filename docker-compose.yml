@@ -1,0 +1,15 @@
+---
+version: '3'
+
+services:
+  tmber:
+    container_name: tmber
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dceoy/tmber:latest
+    volumes:
+      - ${PWD}:/wd
+    working_dir: /wd
+    entrypoint:
+      - tmber
