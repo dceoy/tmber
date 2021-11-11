@@ -28,8 +28,36 @@ def fetch_executable(cmd, ignore_errors=False):
         raise RuntimeError(f'command not found: {cmd}')
 
 
-def stream_vcf_lines(path, exclude_filtered=True, bgzip='bgzip', pigz=None,
-                     pbzip2=None, n_cpu=1):
+def print_yml(data):
+    logger = logging.getLogger(__name__)
+    logger.debug(data)
+    print(yaml.dump(data))
+
+
+def read_bed(path, columns=None, **kwargs):
+    bed_lines = (
+        [d[columns] for d in _stream_bed_lines(path=path, **kwargs)]
+        if columns else [d for d in _stream_bed_lines(path=path, **kwargs)]
+    )
+    return (
+        pd.concat(bed_lines, ignore_index=True, sort=False)
+        if bed_lines else pd.DataFrame(columns=columns)
+    )
+
+
+def read_vcf(path, columns=None, **kwargs):
+    vcf_lines = (
+        [d[columns] for d in _stream_vcf_lines(path=path, **kwargs)]
+        if columns else [d for d in _stream_vcf_lines(path=path, **kwargs)]
+    )
+    return (
+        pd.concat(vcf_lines, ignore_index=True, sort=False)
+        if vcf_lines else pd.DataFrame(columns=columns)
+    )
+
+
+def _stream_vcf_lines(path, include_filtered=False, bgzip='bgzip', pigz=None,
+                      pbzip2=None, n_cpu=1):
     dtype = OrderedDict([
         ('CHROM', str), ('POS', int), ('ID', str), ('REF', str), ('ALT', str),
         ('QUAL', str), ('FILTER', str), ('INFO', str), ('FORMAT', str),
@@ -42,12 +70,11 @@ def stream_vcf_lines(path, exclude_filtered=True, bgzip='bgzip', pigz=None,
         if not s.startswith('#'):
             v = s.strip().split('\t', maxsplit=maxsplit)
             df = pd.DataFrame([v], columns=columns[:len(v)])
-            if not (exclude_filtered
-                    and df.iloc[0]['FILTER'] not in {'PASS', '.'}):
+            if include_filtered or df.iloc[0]['FILTER'] in {'PASS', '.'}:
                 yield df.astype(dtype=dtype)
 
 
-def stream_bed_lines(path, bgzip='bgzip', pigz=None, pbzip2=None, n_cpu=1):
+def _stream_bed_lines(path, bgzip='bgzip', pigz=None, pbzip2=None, n_cpu=1):
     dtype = OrderedDict([
         ('chrom', str), ('chromStart', int), ('chromEnd', int), ('name', str),
         ('score', int), ('strand', str), ('thickStart', int),
@@ -125,7 +152,3 @@ def read_yml(path):
         d = yaml.load(f, Loader=yaml.FullLoader)
     logger.debug('YAML data:' + os.linesep + pformat(d))
     return d
-
-
-def print_yml(data):
-    print(yaml.dump(data))
