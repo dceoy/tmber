@@ -30,6 +30,7 @@ def fetch_executable(cmd, ignore_errors=False):
 
 
 def read_fasta(path):
+    print_log(f'Read a FASTA file: {path}')
     if path.endswith('.gz'):
         f = gzip.open(path, 'rt')
     elif path.endswith('.bz2'):
@@ -48,6 +49,7 @@ def print_yml(data):
 
 
 def read_bed(path, columns=None, **kwargs):
+    print_log(f'Read a BED file: {path}')
     bed_lines = (
         [d[columns] for d in _stream_bed_lines(path=path, **kwargs)]
         if columns else [d for d in _stream_bed_lines(path=path, **kwargs)]
@@ -59,6 +61,7 @@ def read_bed(path, columns=None, **kwargs):
 
 
 def read_vcf(path, columns=None, **kwargs):
+    print_log(f'Read a VCF file: {path}')
     vcf_lines = (
         [d[columns] for d in _stream_vcf_lines(path=path, **kwargs)]
         if columns else [d for d in _stream_vcf_lines(path=path, **kwargs)]

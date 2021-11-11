@@ -6,8 +6,9 @@ import re
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
-from .util import print_yml, read_bed, read_vcf
+from .util import print_log, print_yml, read_bed, read_vcf
 
 
 def calculate_tmb(vcf_paths, bed_path, dest_dir_path='.', bgzip='bgzip',
@@ -28,22 +29,57 @@ def calculate_tmb(vcf_paths, bed_path, dest_dir_path='.', bgzip='bgzip',
     )
     logger.debug(f'df_bed:{os.linesep}{df_bed}')
     bed_stem = Path(bed_path).stem
-    output_count_tsvs = [
-        dest_dir.joinpath(
-            re.sub(r'(\.vcf|)$', f'.vcf.{bed_stem}.count.tsv', Path(p).stem)
-        ) for p in vcf_paths
-    ]
-    for vcf, tsv in zip(vcfs, output_count_tsvs):
-        df_v = _extract_alteration(
-            vcf_path=str(vcf), df_bed=df_bed, bgzip=bgzip,
-            include_filtered=include_filtered, n_cpu=n_cpu
-        )
-        logger.debug(f'df_v:{os.linesep}{df_v}')
-        df_vc = df_v.group(['ref', 'alt']).size().to_frame(
-            name='observed_count'
-        )
-        logger.debug(f'df_vc:{os.linesep}{df_vc}')
-        df_vc.to_csv(str(tsv), sep='\t')
+    df_vc = pd.concat(
+        [
+            _extract_alteration(
+                vcf_path=str(v), df_bed=df_bed, bgzip=bgzip,
+                include_filtered=include_filtered, n_cpu=n_cpu
+            ).group(['ref', 'alt']).size().to_frame(
+                name='observed_count'
+            ).assign(
+                vcf=v.name,
+                sequence_ontology=lambda d: d[['ref', 'alt']].assign(
+                    lambda r: _determine_sequence_ontology(ref=r[0], alt=r[1])
+                )
+            ) for v in vcfs
+        ],
+        ignore_index=True, sort=False
+    ).set_index(['vcf', 'variant_type', 'ref', 'alt']).sort_index()
+    logger.debug(f'df_vc:{os.linesep}{df_vc}')
+    output_tsv = dest_dir.joinpath(f'{bed_stem}.tmber.tsv')
+    print_log(f'Write a TSV file: {output_tsv}')
+    df_vc.to_csv(output_tsv, sep='\t')
+
+
+def _determine_sequence_ontology(ref, alt):
+    if {'[', ']'} & set(alt):
+        return 'structural_variant'
+    elif alt.startswith(('<DEL>', '<DEL:')):
+        return 'deletion'
+    elif alt.startswith(('<INS>', '<INS:')):
+        return 'insertion'
+    elif alt.startswith(('<DUP>', '<DUP:')):
+        return 'duplication'
+    elif alt.startswith(('<INV>', '<INV:')):
+        return 'inversion'
+    elif alt.startswith(('<CNV>', '<CNV:')):
+        return 'copy_number_variation'
+    elif alt == '.':
+        return 'no_sequence_alteration'
+    elif alt == '*':
+        return 'deletion'
+    else:
+        alt0 = alt.split(',', maxsplit=1)[0]
+        if len(ref) == 1 and len(alt0) == 1:
+            return 'SNV'
+        elif ref[0] == alt0[0] and len(ref) > 1 and len(alt0) == 1:
+            return 'deletion'
+        elif ref[0] == alt0[0] and len(ref) == 1 and len(alt0) > 1:
+            return 'insertion'
+        elif len(ref) > 1 and len(alt0) > 1:
+            return 'delins'
+        else:
+            return ''
 
 
 def _extract_alteration(vcf_path, df_bed, **kwargs):
