@@ -11,6 +11,7 @@ from pprint import pformat
 
 import pandas as pd
 import yaml
+from Bio import SeqIO
 
 
 def fetch_executable(cmd, ignore_errors=False):
@@ -26,6 +27,18 @@ def fetch_executable(cmd, ignore_errors=False):
         return None
     else:
         raise RuntimeError(f'command not found: {cmd}')
+
+
+def read_fasta(path):
+    if path.endswith('.gz'):
+        f = gzip.open(path, 'rt')
+    elif path.endswith('.bz2'):
+        f = bz2.open(path, 'rt')
+    else:
+        f = open(path, 'r')
+    records = SeqIO.to_dict(SeqIO.parse(f, 'fasta'))
+    f.close()
+    return records
 
 
 def print_yml(data):

@@ -18,7 +18,7 @@ setup(
     url='https://github.com/dceoy/tmber.git',
     packages=find_packages(),
     include_package_data=True,
-    install_requires=['docopt', 'pandas', 'psutil', 'pyyaml'],
+    install_requires=['biopython', 'docopt', 'pandas', 'psutil', 'pyyaml'],
     entry_points={
         'console_scripts': ['tmber=tmber.cli:main']
     },
