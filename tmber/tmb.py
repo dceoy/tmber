@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .util import print_log, print_yml, read_bed, read_vcf
+from .util import print_log, read_bed, read_vcf
 
 
 def calculate_tmb(vcf_paths, bed_path, dest_dir_path='.', bgzip='bgzip',
@@ -17,10 +17,6 @@ def calculate_tmb(vcf_paths, bed_path, dest_dir_path='.', bgzip='bgzip',
     vcfs = [Path(p).resolve() for p in vcf_paths]
     bed = Path(bed_path).resolve()
     dest_dir = Path(dest_dir_path).resolve()
-    print_yml([
-        {'n_cpu': n_cpu}, {'bed': bed}, {'vcfs': vcfs},
-        {'dest_dir': dest_dir}
-    ])
     df_bed = read_bed(
         path=str(bed), columns=['chrom', 'chromStart', 'chromEnd'],
         bgzip=bgzip, n_cpu=n_cpu

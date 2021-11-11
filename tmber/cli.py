@@ -5,30 +5,28 @@ Tumor Mutational Burden Analyzer
 Usage:
     tmber -h|--help
     tmber --version
+    tmber bed [--debug|--info] [--cpus=<int>] [--human-autosome]
+        [--dest-dir=<path>] <fa_path>
     tmber tmb [--debug|--info] [--cpus=<int>] [--include-filtered]
         [--dest-dir=<path>] <bed_path> <vcf_path>...
-    tmber fa2bed [--debug|--info] [--cpus=<int>] [--uppercase]
-        [--human-autosome] <fa_path> <bed_path>
 
 Commands:
-    tmb                     Calculate variant counts on a BED resion
-    fa2bed                  Create an accessible BED file from a FASTA file
-                            (excluding Ns in sequences)
+    bed                 Identify regions of uppercase A, C, G, and T in FASTA
+    tmb                 Calculate variant counts on a BED resion
 
 Options:
-    -h, --help              Print help and exit
-    --version               Print version and exit
-    --debug, --info         Execute a command with debug|info messages
-    --cpus=<int>            Limit CPU cores used
-    --include-filtered      Include filtered variants (`PASS` or `.`)
-    --dest-dir=<path>       Specify a path to an output TSV file [default: .]
-    --uppercase             Extract only uppercases in sequences
-    --human-autosome        Extract only human autosomes (chr1-22)
+    -h, --help          Print help and exit
+    --version           Print version and exit
+    --debug, --info     Execute a command with debug|info messages
+    --cpus=<int>        Limit CPU cores used
+    --human-autosome    Extract only human autosomes (chr1-22)
+    --dest-dir=<path>   Specify a path to an output TSV file [default: .]
+    --include-filtered  Include filtered variants (`PASS` or `.`)
 
 Args:
-    <bed_path>              Path to a BED file for TMB
-    <vcf_path>              Path to a VCF file
-    <fa_path>               Path to a genome FASTA file
+    <bed_path>          Path to a BED file for TMB
+    <vcf_path>          Path to a VCF file
+    <fa_path>           Path to a genome FASTA file
 """
 
 import logging
@@ -57,17 +55,16 @@ def main():
     )
     logger = logging.getLogger(__name__)
     logger.debug(f'args:{os.linesep}{args}')
-    if args['fa2bed']:
+    n_cpu = int(args['--cpus'] or cpu_count())
+    if args['bed']:
         create_bed_from_fa(
-            fa_path=args['<fa_path>'], bed_path=args['<bed_path>'],
-            bgzip=fetch_executable('bgzip'), uppercase=args['--uppercase'],
-            human_autosome=args['--human-autosome'],
-            n_cpu=int(args['--cpus'] or cpu_count())
+            fa_path=args['<fa_path>'], dest_dir_path=args['--dest-dir'],
+            bgzip=fetch_executable('bgzip'),
+            human_autosome=args['--human-autosome'], n_cpu=n_cpu
         )
     if args['tmb']:
         calculate_tmb(
             vcf_paths=args['<vcf_path>'], bed_path=args['<bed_path>'],
             dest_dir_path=args['--dest-dir'], bgzip=fetch_executable('bgzip'),
-            include_filtered=args['--include-filtered'],
-            n_cpu=int(args['--cpus'] or cpu_count())
+            include_filtered=args['--include-filtered'], n_cpu=n_cpu
         )
