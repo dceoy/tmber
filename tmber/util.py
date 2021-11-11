@@ -50,62 +50,75 @@ def print_yml(data):
 
 def read_bed(path, columns=None, **kwargs):
     print_log(f'Read a BED file: {path}')
+    dtype = {
+        'chrom': str, 'chromStart': int, 'chromEnd': int, 'name': str,
+        'score': int, 'strand': str, 'thickStart': int, 'thickEnd': int,
+        'itemRgb': str, 'blockCount': int, 'blockSizes': int,
+        'blockStarts': int, 'ADDITIONAL': str
+    }
     bed_lines = (
-        [d[columns] for d in _stream_bed_lines(path=path, **kwargs)]
-        if columns else [d for d in _stream_bed_lines(path=path, **kwargs)]
+        [
+            OrderedDict([(k, v) for k, v in d.items() if k in columns])
+            for d in _stream_bed_lines(path=path, **kwargs)
+        ] if columns else [d for d in _stream_bed_lines(path=path, **kwargs)]
     )
     return (
-        pd.concat(bed_lines, ignore_index=True, sort=False)
-        if bed_lines else pd.DataFrame(columns=columns)
+        pd.DataFrame(bed_lines) if bed_lines else pd.DataFrame(columns=columns)
+    ).pipe(
+        lambda d:
+        d.astype(dtype={k: v for k, v in dtype.items() if k in d.columns})
     )
 
 
 def read_vcf(path, columns=None, **kwargs):
     print_log(f'Read a VCF file: {path}')
+    dtype = {
+        'CHROM': str, 'POS': int, 'ID': str, 'REF': str, 'ALT': str,
+        'QUAL': str, 'FILTER': str, 'INFO': str, 'FORMAT': str,
+        'ADDITIONAL': str
+    }
     vcf_lines = (
-        [d[columns] for d in _stream_vcf_lines(path=path, **kwargs)]
-        if columns else [d for d in _stream_vcf_lines(path=path, **kwargs)]
+        [
+            OrderedDict([(k, v) for k, v in d.items() if k in columns])
+            for d in _stream_vcf_lines(path=path, **kwargs)
+        ] if columns else [d for d in _stream_vcf_lines(path=path, **kwargs)]
     )
     return (
-        pd.concat(vcf_lines, ignore_index=True, sort=False)
-        if vcf_lines else pd.DataFrame(columns=columns)
+        pd.DataFrame(vcf_lines) if vcf_lines else pd.DataFrame(columns=columns)
+    ).pipe(
+        lambda d:
+        d.astype(dtype={k: v for k, v in dtype.items() if k in d.columns})
     )
 
 
 def _stream_vcf_lines(path, include_filtered=False, bgzip='bgzip', pigz=None,
                       pbzip2=None, n_cpu=1):
-    dtype = OrderedDict([
-        ('CHROM', str), ('POS', int), ('ID', str), ('REF', str), ('ALT', str),
-        ('QUAL', str), ('FILTER', str), ('INFO', str), ('FORMAT', str),
-        ('ADDITIONAL', str)
-    ])
-    columns = list(dtype.keys())
+    columns = [
+        'CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT',
+        'ADDITIONAL'
+    ]
     maxsplit = len(columns) - 1
     for s in _open_and_stream_file(path=path, bgzip=bgzip, pigz=pigz,
                                    pbzip2=pbzip2, n_cpu=n_cpu):
         if not s.startswith('#'):
-            v = s.strip().split('\t', maxsplit=maxsplit)
-            df = pd.DataFrame([v], columns=columns[:len(v)])
-            if include_filtered or df.iloc[0]['FILTER'] in {'PASS', '.'}:
-                yield df.astype(dtype=dtype)
+            values = s.strip().split('\t', maxsplit=maxsplit)
+            od = OrderedDict(zip(columns[:len(values)], values))
+            if include_filtered or od['FILTER'] in {'PASS', '.'}:
+                yield od
 
 
 def _stream_bed_lines(path, bgzip='bgzip', pigz=None, pbzip2=None, n_cpu=1):
-    dtype = OrderedDict([
-        ('chrom', str), ('chromStart', int), ('chromEnd', int), ('name', str),
-        ('score', int), ('strand', str), ('thickStart', int),
-        ('thickEnd', int), ('itemRgb', str), ('blockCount', int),
-        ('blockSizes', int), ('blockStarts', int), ('ADDITIONAL', str)
-    ])
-    columns = list(dtype.keys())
+    columns = [
+        'chrom', 'chromStart', 'chromEnd', 'name', 'score', 'strand',
+        'thickStart', 'thickEnd', 'itemRgb', 'blockCount', 'blockSizes',
+        'blockStarts', 'ADDITIONAL'
+    ]
     maxsplit = len(columns) - 1
     for s in _open_and_stream_file(path=path, bgzip=bgzip, pigz=pigz,
                                    pbzip2=pbzip2, n_cpu=n_cpu):
         if not s.startswith(('browser', 'track')):
-            v = s.strip().split('\t', maxsplit=maxsplit)
-            yield pd.DataFrame(
-                [v], columns=columns[:len(v)]
-            ).astype(dtype=dtype)
+            values = s.strip().split('\t', maxsplit=maxsplit)
+            yield OrderedDict(zip(columns[:len(values)], values))
 
 
 def _open_and_stream_file(path, bgzip='bgzip', pigz=None, pbzip2=None,

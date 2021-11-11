@@ -30,12 +30,13 @@ def calculate_tmb(vcf_paths, bed_path, dest_dir_path='.', bgzip='bgzip',
             _extract_alteration(
                 vcf_path=str(v), df_bed=df_bed, bgzip=bgzip,
                 include_filtered=include_filtered, n_cpu=n_cpu
-            ).group(['ref', 'alt']).size().to_frame(
+            ).groupby(['ref', 'alt']).size().to_frame(
                 name='observed_count'
-            ).assign(
+            ).reset_index().assign(
                 vcf=v.name,
-                sequence_ontology=lambda d: d[['ref', 'alt']].assign(
-                    lambda r: _determine_sequence_ontology(ref=r[0], alt=r[1])
+                variant_type=lambda d: d[['ref', 'alt']].apply(
+                    lambda r: _determine_sequence_ontology(ref=r[0], alt=r[1]),
+                    axis=1
                 )
             ) for v in vcfs
         ],
@@ -87,7 +88,7 @@ def _extract_alteration(vcf_path, df_bed, **kwargs):
         pos_end=lambda d: np.where(
             d['ALT'].str.startswith('<'),
             d['INFO'].str.replace(
-                r'^(.+;|)END=([0-9]+);.*$', r'\2'
+                r'^(.+;|)END=([0-9]+);.*$', r'\2', regex=True
             ).pipe(
                 lambda i: i.where(i.str.isdigit(), np.nan)
             ).astype(float),
@@ -110,4 +111,6 @@ def _extract_alteration(vcf_path, df_bed, **kwargs):
 
 
 def _normalize_chrom_name(series):
-    return series.str.replace(r'^(chr|)', 'chr', flags=re.IGNORECASE)
+    return series.str.replace(
+        r'^(chr|)', 'chr', regex=True, flags=re.IGNORECASE
+    )
