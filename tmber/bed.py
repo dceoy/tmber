@@ -25,16 +25,18 @@ def create_bed_from_fa(fa_path, dest_dir_path, bgzip='bgzip',
     fs = list()
     with ProcessPoolExecutor(max_workers=n_cpu) as x:
         for chrom, seq in read_fasta_and_generate_seq(path=str(fa)):
+            seq_len = len(seq)
             if human_autosome and chrom in autosomes:
                 print_log(
-                    'Detect the target letters:\t'
-                    + '{0} ({1} bp)'.format(chrom, len(seq))
+                    f'Detect the target letters:\t{chrom}\t({seq_len} bp)'
                 )
                 fs.append(
                     x.submit(
                         _identify_target_region, chrom, seq, target_letter_set
                     )
                 )
+            else:
+                logger.info(f'Skip detection: {chrom} ({seq_len} bp)')
         df_bed = pd.concat(
             [f.result() for f in as_completed(fs)], ignore_index=True,
             sort=False
@@ -45,10 +47,8 @@ def create_bed_from_fa(fa_path, dest_dir_path, bgzip='bgzip',
 
 
 def _identify_target_region(chrom, sequence, target_letter_set):
-    logger = logging.getLogger(__name__)
     bseq = pd.Series(list(sequence)).isin(target_letter_set).astype(int)
     if bseq.sum() > 0:
-        logger.info(f'Identify regions to extract: {chrom}')
         return bseq.pipe(
             lambda s: pd.DataFrame({
                 'chrom': chrom,
@@ -63,4 +63,5 @@ def _identify_target_region(chrom, sequence, target_letter_set):
             })
         )
     else:
-        logger.info(f'No region to extract: {chrom}')
+        logger = logging.getLogger(__name__)
+        logger.info(f'Target letters not detected: {chrom}')

@@ -8,7 +8,7 @@ Usage:
     tmber bed [--debug|--info] [--cpus=<int>] [--human-autosome]
         [--target-letters=<str>] [--dest-dir=<path>] <fa_path>
     tmber tmb [--debug|--info] [--cpus=<int>] [--include-filtered]
-        [--dest-dir=<path>] <bed_path> <vcf_path>...
+        [--dest-dir=<path>] <vcf_path> <bed_path>...
 
 Commands:
     bed                 Identify regions consisting of target letters in FASTA
@@ -68,7 +68,7 @@ def main():
         )
     if args['tmb']:
         calculate_tmb(
-            vcf_paths=args['<vcf_path>'], bed_path=args['<bed_path>'],
+            vcf_path=args['<vcf_path>'], bed_paths=args['<bed_path>'],
             dest_dir_path=args['--dest-dir'],
             bedtools=fetch_executable('bedtools'),
             bgzip=fetch_executable('bgzip'),

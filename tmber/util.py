@@ -48,7 +48,7 @@ def print_yml(data):
     print(yaml.dump(data))
 
 
-def read_bed(path, columns=None, **kwargs):
+def read_bed(path, **kwargs):
     print_log(f'Read a BED file:\t{path}')
     dtype = {
         'chrom': str, 'chromStart': int, 'chromEnd': int, 'name': str,
@@ -56,35 +56,24 @@ def read_bed(path, columns=None, **kwargs):
         'itemRgb': str, 'blockCount': int, 'blockSizes': int,
         'blockStarts': int, 'ADDITIONAL': str
     }
-    bed_lines = (
-        [
-            OrderedDict([(k, v) for k, v in d.items() if k in columns])
-            for d in _stream_bed_lines(path=path, **kwargs)
-        ] if columns else [d for d in _stream_bed_lines(path=path, **kwargs)]
-    )
+    bed_lines = [d for d in _stream_bed_lines(path=path, **kwargs)]
     return (
-        pd.DataFrame(bed_lines) if bed_lines else pd.DataFrame(columns=columns)
+        pd.DataFrame(bed_lines) if bed_lines else pd.DataFrame()
     ).pipe(
         lambda d:
         d.astype(dtype={k: v for k, v in dtype.items() if k in d.columns})
     )
 
 
-def read_vcf(path, columns=None, **kwargs):
+def read_vcf(path, **kwargs):
     print_log(f'Read a VCF file:\t{path}')
     dtype = {
         'CHROM': str, 'POS': int, 'ID': str, 'REF': str, 'ALT': str,
-        'QUAL': str, 'FILTER': str, 'INFO': str, 'FORMAT': str,
-        'ADDITIONAL': str
+        'QUAL': str, 'FILTER': str, 'INFO': str, 'FORMAT': str
     }
-    vcf_lines = (
-        [
-            OrderedDict([(k, v) for k, v in d.items() if k in columns])
-            for d in _stream_vcf_lines(path=path, **kwargs)
-        ] if columns else [d for d in _stream_vcf_lines(path=path, **kwargs)]
-    )
+    vcf_lines = [d for d in _stream_vcf_lines(path=path, **kwargs)]
     return (
-        pd.DataFrame(vcf_lines) if vcf_lines else pd.DataFrame(columns=columns)
+        pd.DataFrame(vcf_lines) if vcf_lines else pd.DataFrame()
     ).pipe(
         lambda d:
         d.astype(dtype={k: v for k, v in dtype.items() if k in d.columns})
@@ -92,15 +81,16 @@ def read_vcf(path, columns=None, **kwargs):
 
 
 def _stream_vcf_lines(path, include_filtered=False, **kwargs):
-    columns = [
-        'CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT',
-        'ADDITIONAL'
-    ]
-    maxsplit = len(columns) - 1
+    columns = None
+    maxsplit = None
     for s in _open_and_stream_file(path=path, **kwargs):
-        if not s.startswith('#'):
+        if s.startswith('#CHROM'):
+            columns = s[1:].strip().split('\t')
+            maxsplit = len(columns) - 1
+        elif not s.startswith('##'):
+            assert (columns and maxsplit), 'columns not found'
             values = s.strip().split('\t', maxsplit=maxsplit)
-            od = OrderedDict(zip(columns[:len(values)], values))
+            od = OrderedDict(zip(columns, values))
             if include_filtered or od['FILTER'] in {'PASS', '.'}:
                 yield od
 
