@@ -29,7 +29,7 @@ def fetch_executable(cmd, ignore_errors=False):
         raise RuntimeError(f'command not found: {cmd}')
 
 
-def read_fasta(path):
+def read_fasta_and_generate_seq(path):
     print_log(f'Read a FASTA file: {path}')
     if path.endswith('.gz'):
         f = gzip.open(path, 'rt')
@@ -37,9 +37,9 @@ def read_fasta(path):
         f = bz2.open(path, 'rt')
     else:
         f = open(path, 'r')
-    records = SeqIO.to_dict(SeqIO.parse(f, 'fasta'))
+    for s in SeqIO.parse(f, 'fasta'):
+        yield s.id, s.seq
     f.close()
-    return records
 
 
 def print_yml(data):

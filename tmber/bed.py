@@ -8,40 +8,45 @@ from pathlib import Path
 
 import pandas as pd
 
-from .util import print_log, read_fasta
+from .util import print_log, read_fasta_and_generate_seq
 
 
 def create_bed_from_fa(fa_path, dest_dir_path, bgzip='bgzip',
                        human_autosome=False, target_letters='ACGT', n_cpu=1):
     logger = logging.getLogger(__name__)
+    target_letter_set = set(target_letters)
+    print_log('Set target letters:\t{}'.format(target_letter_set))
     fa = Path(fa_path).resolve()
     bed = Path(dest_dir_path).resolve().joinpath(
         re.sub(r'\.(gz|bz2|bgz)', '', Path(fa_path).name)
-        + '.' + ''.join(set(target_letters)) + '.bed'
+        + '.' + ''.join(target_letter_set) + '.bed'
     )
     autosomes = {f'chr{i}' for i in range(1, 23)}
-    chrom_seqs = {
-        k: v for k, v in read_fasta(path=str(fa)).items()
-        if human_autosome and k in autosomes
-    }
-    print_log('Identify target letters: {}'.format(set(target_letters)))
+    fs = list()
     with ProcessPoolExecutor(max_workers=n_cpu) as x:
-        fs = [
-            x.submit(_identify_target_region, k, v.seq, target_letters)
-            for k, v in chrom_seqs.items()
-        ]
+        for chrom, seq in read_fasta_and_generate_seq(path=str(fa)):
+            if human_autosome and chrom in autosomes:
+                print_log(
+                    'Detect the target letters:\t'
+                    + '{0} ({1} bp)'.format(chrom, len(seq))
+                )
+                fs.append(
+                    x.submit(
+                        _identify_target_region, chrom, seq, target_letter_set
+                    )
+                )
         df_bed = pd.concat(
             [f.result() for f in as_completed(fs)], ignore_index=True,
             sort=False
         ).sort_values(['chrom', 'chromStart', 'chromEnd'])
     logger.debug(f'df_bed:{os.linesep}{df_bed}')
-    print_log(f'Write a BED file: {bed}')
+    print_log(f'Write a BED file:\t{bed}')
     df_bed.to_csv(bed, sep='\t', header=False, index=False)
 
 
-def _identify_target_region(chrom, sequence, target_letters='ACGT'):
+def _identify_target_region(chrom, sequence, target_letter_set):
     logger = logging.getLogger(__name__)
-    bseq = pd.Series(list(sequence)).isin(set(target_letters)).astype(int)
+    bseq = pd.Series(list(sequence)).isin(target_letter_set).astype(int)
     if bseq.sum() > 0:
         logger.info(f'Identify regions to extract: {chrom}')
         return bseq.pipe(
