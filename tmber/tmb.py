@@ -11,15 +11,15 @@ import pandas as pd
 from .util import print_log, read_bed, read_vcf
 
 
-def calculate_tmb(vcf_paths, bed_path, dest_dir_path='.', bgzip='bgzip',
-                  include_filtered=False, n_cpu=1):
+def calculate_tmb(vcf_paths, bed_path, dest_dir_path='.', bedtools='bedtools',
+                  bgzip='bgzip', include_filtered=False, n_cpu=1):
     logger = logging.getLogger(__name__)
     vcfs = [Path(p).resolve() for p in vcf_paths]
     bed = Path(bed_path).resolve()
     dest_dir = Path(dest_dir_path).resolve()
     df_bed = read_bed(
         path=str(bed), columns=['chrom', 'chromStart', 'chromEnd'],
-        bgzip=bgzip, n_cpu=n_cpu
+        bedtools=bedtools
     ).assign(
         chrom=lambda d: _normalize_chrom_name(series=d['chrom'])
     )
@@ -44,7 +44,7 @@ def calculate_tmb(vcf_paths, bed_path, dest_dir_path='.', bgzip='bgzip',
     ).set_index(['vcf', 'variant_type', 'ref', 'alt']).sort_index()
     logger.debug(f'df_vc:{os.linesep}{df_vc}')
     output_tsv = dest_dir.joinpath(f'{bed_stem}.tmber.tsv')
-    print_log(f'Write a TSV file: {output_tsv}')
+    print_log(f'Write a TSV file:\t{output_tsv}')
     df_vc.to_csv(output_tsv, sep='\t')
 
 

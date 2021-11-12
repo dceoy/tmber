@@ -13,7 +13,7 @@ RUN set -e \
       && apt-get -y update \
       && apt-get -y dist-upgrade \
       && apt-get -y install --no-install-recommends --no-install-suggests \
-        autoconf ca-certificates curl gcc gnuplot libbz2-dev \
+        autoconf ca-certificates curl g++ gcc gnuplot libbz2-dev \
         libcurl4-gnutls-dev liblzma-dev libncurses5-dev libssl-dev libz-dev \
         make pbzip2 pigz pkg-config python3 python3-distutils \
       && apt-get -y autoremove \
@@ -32,6 +32,15 @@ RUN set -eo pipefail \
       && autoheader \
       && autoconf \
       && ./configure \
+      && make \
+      && make install
+
+RUN set -eo pipefail \
+      && print-github-tags --release --latest --tar arq5x/bedtools2 \
+        | xargs -i curl -SL {} -o /tmp/bedtools2.tar.gz \
+      && tar xvf /tmp/bedtools2.tar.gz -C /usr/local/src --remove-files \
+      && mv /usr/local/src/bedtools2-* /usr/local/src/bedtools2 \
+      && cd /usr/local/src/bedtools2 \
       && make \
       && make install
 

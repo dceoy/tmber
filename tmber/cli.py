@@ -69,6 +69,8 @@ def main():
     if args['tmb']:
         calculate_tmb(
             vcf_paths=args['<vcf_path>'], bed_path=args['<bed_path>'],
-            dest_dir_path=args['--dest-dir'], bgzip=fetch_executable('bgzip'),
+            dest_dir_path=args['--dest-dir'],
+            bedtools=fetch_executable('bedtools'),
+            bgzip=fetch_executable('bgzip'),
             include_filtered=args['--include-filtered'], n_cpu=n_cpu
         )

@@ -30,7 +30,7 @@ def fetch_executable(cmd, ignore_errors=False):
 
 
 def read_fasta_and_generate_seq(path):
-    print_log(f'Read a FASTA file: {path}')
+    print_log(f'Read a FASTA file:\t{path}')
     if path.endswith('.gz'):
         f = gzip.open(path, 'rt')
     elif path.endswith('.bz2'):
@@ -49,7 +49,7 @@ def print_yml(data):
 
 
 def read_bed(path, columns=None, **kwargs):
-    print_log(f'Read a BED file: {path}')
+    print_log(f'Read a BED file:\t{path}')
     dtype = {
         'chrom': str, 'chromStart': int, 'chromEnd': int, 'name': str,
         'score': int, 'strand': str, 'thickStart': int, 'thickEnd': int,
@@ -71,7 +71,7 @@ def read_bed(path, columns=None, **kwargs):
 
 
 def read_vcf(path, columns=None, **kwargs):
-    print_log(f'Read a VCF file: {path}')
+    print_log(f'Read a VCF file:\t{path}')
     dtype = {
         'CHROM': str, 'POS': int, 'ID': str, 'REF': str, 'ALT': str,
         'QUAL': str, 'FILTER': str, 'INFO': str, 'FORMAT': str,
@@ -91,15 +91,13 @@ def read_vcf(path, columns=None, **kwargs):
     )
 
 
-def _stream_vcf_lines(path, include_filtered=False, bgzip='bgzip', pigz=None,
-                      pbzip2=None, n_cpu=1):
+def _stream_vcf_lines(path, include_filtered=False, **kwargs):
     columns = [
         'CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT',
         'ADDITIONAL'
     ]
     maxsplit = len(columns) - 1
-    for s in _open_and_stream_file(path=path, bgzip=bgzip, pigz=pigz,
-                                   pbzip2=pbzip2, n_cpu=n_cpu):
+    for s in _open_and_stream_file(path=path, **kwargs):
         if not s.startswith('#'):
             values = s.strip().split('\t', maxsplit=maxsplit)
             od = OrderedDict(zip(columns[:len(values)], values))
@@ -107,15 +105,18 @@ def _stream_vcf_lines(path, include_filtered=False, bgzip='bgzip', pigz=None,
                 yield od
 
 
-def _stream_bed_lines(path, bgzip='bgzip', pigz=None, pbzip2=None, n_cpu=1):
+def _stream_bed_lines(path, merge=True, bedtools='bedtools', **kwargs):
     columns = [
         'chrom', 'chromStart', 'chromEnd', 'name', 'score', 'strand',
         'thickStart', 'thickEnd', 'itemRgb', 'blockCount', 'blockSizes',
         'blockStarts', 'ADDITIONAL'
     ]
     maxsplit = len(columns) - 1
-    for s in _open_and_stream_file(path=path, bgzip=bgzip, pigz=pigz,
-                                   pbzip2=pbzip2, n_cpu=n_cpu):
+    iters = (
+        _run_and_parse_subprocess(args=[bedtools, 'merge', '-i', str(path)])
+        if merge else _open_and_stream_file(path=path, **kwargs)
+    )
+    for s in iters:
         if not s.startswith(('browser', 'track')):
             values = s.strip().split('\t', maxsplit=maxsplit)
             yield OrderedDict(zip(columns[:len(values)], values))
