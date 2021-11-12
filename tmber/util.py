@@ -48,8 +48,12 @@ def print_yml(data):
     print(yaml.dump(data))
 
 
-def read_bed(path, **kwargs):
-    print_log(f'Read a BED file:\t{path}')
+def read_bed(path, merge=True, **kwargs):
+    print_log(
+        'Read a BED file{0}:\t{1}'.format(
+            (' (merging intervals)' if merge else ''), path
+        )
+    )
     dtype = {
         'chrom': str, 'chromStart': int, 'chromEnd': int, 'name': str,
         'score': int, 'strand': str, 'thickStart': int, 'thickEnd': int,
@@ -65,34 +69,65 @@ def read_bed(path, **kwargs):
     )
 
 
-def read_vcf(path, **kwargs):
-    print_log(f'Read a VCF file:\t{path}')
+def read_vcf(path, sample_name=None, min_af=None, max_af=None,
+             include_filtered=False, **kwargs):
+    print_log(
+        'Read a VCF file ({0} filtered variants):\t{1}'.format(
+            ('including' if include_filtered else 'excluding'), path
+        )
+    )
     dtype = {
         'CHROM': str, 'POS': int, 'ID': str, 'REF': str, 'ALT': str,
         'QUAL': str, 'FILTER': str, 'INFO': str, 'FORMAT': str
     }
     vcf_lines = [d for d in _stream_vcf_lines(path=path, **kwargs)]
-    return (
-        pd.DataFrame(vcf_lines) if vcf_lines else pd.DataFrame()
-    ).pipe(
-        lambda d:
-        d.astype(dtype={k: v for k, v in dtype.items() if k in d.columns})
-    )
+    if not vcf_lines:
+        return pd.DataFrame()
+    else:
+        df_vcf = pd.DataFrame(vcf_lines).pipe(
+            lambda d:
+            d.astype(dtype={k: v for k, v in dtype.items() if k in d.columns})
+        )
+        if min_af is None and max_af is None:
+            return df_vcf
+        else:
+            if min_af is None:
+                condition_str = f'AF <= {max_af}'
+            elif max_af is None:
+                condition_str = f'AF >= {min_af}'
+            else:
+                condition_str = f'{min_af} <= AF <= {max_af}'
+            print_log(f'Extract variants with {condition_str}:\t{sample_name}')
+            return df_vcf.assign(
+                AF=lambda d: _extract_sample_af(df=d, sample_name=sample_name)
+            ).pipe(
+                lambda d: (d if min_af is None else d[d['AF'] >= min_af])
+            ).pipe(
+                lambda d: (d if max_af is None else d[d['AF'] <= max_af])
+            )
+
+
+def _extract_sample_af(df, sample_name):
+    assert sample_name in df.columns, f'column not found: {sample_name}'
+    return df[['FORMAT', sample_name]].apply(
+        lambda r: dict(zip(r[0].split(':'), r[1].split(':'))).get('AF'),
+        axis=1
+    ).astype(float)
 
 
 def _stream_vcf_lines(path, include_filtered=False, **kwargs):
     columns = None
     maxsplit = None
     for s in _open_and_stream_file(path=path, **kwargs):
-        if s.startswith('#CHROM'):
-            columns = s[1:].strip().split('\t')
-            maxsplit = len(columns) - 1
-        elif not s.startswith('##'):
+        if not s.startswith('#'):
             assert (columns and maxsplit), 'columns not found'
             values = s.strip().split('\t', maxsplit=maxsplit)
             od = OrderedDict(zip(columns, values))
             if include_filtered or od['FILTER'] in {'PASS', '.'}:
                 yield od
+        elif s.startswith('#CHROM'):
+            columns = s[1:].strip().split('\t')
+            maxsplit = len(columns) - 1
 
 
 def _stream_bed_lines(path, merge=True, bedtools='bedtools', **kwargs):
@@ -103,8 +138,10 @@ def _stream_bed_lines(path, merge=True, bedtools='bedtools', **kwargs):
     ]
     maxsplit = len(columns) - 1
     iters = (
-        _run_and_parse_subprocess(args=[bedtools, 'merge', '-i', str(path)])
-        if merge else _open_and_stream_file(path=path, **kwargs)
+        _run_and_parse_subprocess(
+            args=f'{bedtools} sort -i {path} | {bedtools} merge -i -',
+            shell=True
+        ) if merge else _open_and_stream_file(path=path, **kwargs)
     )
     for s in iters:
         if not s.startswith(('browser', 'track')):

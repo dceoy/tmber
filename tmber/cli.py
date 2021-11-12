@@ -8,6 +8,7 @@ Usage:
     tmber bed [--debug|--info] [--cpus=<int>] [--human-autosome]
         [--target-letters=<str>] [--dest-dir=<path>] <fa_path>
     tmber tmb [--debug|--info] [--cpus=<int>] [--include-filtered]
+        [--sample=<name>] [--min-af=<float>] [--max-af=<float>]
         [--dest-dir=<path>] <vcf_path> <bed_path>...
 
 Commands:
@@ -24,11 +25,14 @@ Options:
                         Specify nucleic acid codes to include [default: ACGT]
     --dest-dir=<path>   Specify a path to an output TSV file [default: .]
     --include-filtered  Include filtered variants (`PASS` or `.`)
+    --sample=<name>     Specify a sample column including AF in a VCF file
+    --min-af=<float>    Specify the min AF limit
+    --max-af=<float>    Specify the max AF limit
 
 Args:
     <fa_path>           Path to a genome FASTA file
-    <bed_path>          Path to a BED file for TMB
     <vcf_path>          Path to a VCF file
+    <bed_path>          Path to a BED file for TMB
 """
 
 import logging
@@ -63,14 +67,19 @@ def main():
             fa_path=args['<fa_path>'], dest_dir_path=args['--dest-dir'],
             bgzip=fetch_executable('bgzip'),
             human_autosome=args['--human-autosome'],
-            target_letters=args['--target-letters'],
-            n_cpu=n_cpu
+            target_letters=args['--target-letters'], n_cpu=n_cpu
         )
     if args['tmb']:
+        if args['--min-af'] or args['--max-af']:
+            assert bool(args['--sample']), '--sample requred for AF limits'
         calculate_tmb(
             vcf_path=args['<vcf_path>'], bed_paths=args['<bed_path>'],
             dest_dir_path=args['--dest-dir'],
             bedtools=fetch_executable('bedtools'),
             bgzip=fetch_executable('bgzip'),
-            include_filtered=args['--include-filtered'], n_cpu=n_cpu
+            include_filtered=args['--include-filtered'],
+            sample_name=args['--sample'],
+            min_af=(float(args['--min-af']) if args['--min-af'] else None),
+            max_af=(float(args['--max-af']) if args['--max-af'] else None),
+            n_cpu=n_cpu
         )

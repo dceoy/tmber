@@ -37,10 +37,10 @@ def create_bed_from_fa(fa_path, dest_dir_path, bgzip='bgzip',
                 )
             else:
                 logger.info(f'Skip detection: {chrom} ({seq_len} bp)')
-        df_bed = pd.concat(
-            [f.result() for f in as_completed(fs)], ignore_index=True,
-            sort=False
-        ).sort_values(['chrom', 'chromStart', 'chromEnd'])
+        f_results = [f.result() for f in as_completed(fs)]
+    df_bed = pd.concat(
+        f_results, ignore_index=True, sort=False
+    ).sort_values(['chrom', 'chromStart', 'chromEnd'])
     logger.debug(f'df_bed:{os.linesep}{df_bed}')
     print_log(f'Write a BED file:\t{bed}')
     df_bed.to_csv(bed, sep='\t', header=False, index=False)

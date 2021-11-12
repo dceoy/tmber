@@ -7,7 +7,8 @@ ADD https://raw.githubusercontent.com/dceoy/print-github-tags/master/print-githu
 ADD . /tmp/tmber
 
 RUN set -e \
-      && ln -sf bash /bin/sh
+      && ln -sf bash /bin/sh \
+      && ln -s python3 /usr/bin/python
 
 RUN set -e \
       && apt-get -y update \
