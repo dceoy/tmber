@@ -15,6 +15,7 @@ $ pip install -U tmber
 
 Dependent commands:
 
+- `bedtools`
 - `bgzip`
 
 Docker image
