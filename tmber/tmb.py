@@ -17,7 +17,10 @@ def calculate_tmb(vcf_path, bed_paths, dest_dir_path='.', bedtools='bedtools',
                   min_af=None, max_af=None, n_cpu=1):
     logger = logging.getLogger(__name__)
     vcf = Path(vcf_path).resolve()
+    assert vcf.is_file(), f'file not found: {vcf}'
     beds = [Path(p).resolve() for p in bed_paths]
+    for bed in beds:
+        assert bed.is_file(), f'file not found: {bed}'
     output_tsv = Path(dest_dir_path).resolve().joinpath(
         '.'.join([
             re.sub(r'\.(gz|bz2|bgz)', '', Path(vcf_path).name),

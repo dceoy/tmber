@@ -17,6 +17,7 @@ def create_bed_from_fa(fa_path, dest_dir_path, bgzip='bgzip',
     target_letter_set = set(target_letters)
     print_log('Set target letters:\t{}'.format(target_letter_set))
     fa = Path(fa_path).resolve()
+    assert fa.is_file(), f'file not found: {fa}'
     bed = Path(dest_dir_path).resolve().joinpath(
         re.sub(r'\.(gz|bz2|bgz)', '', Path(fa_path).name)
         + '.' + ''.join(target_letter_set) + '.bed'
