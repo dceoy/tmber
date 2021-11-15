@@ -21,31 +21,49 @@ def calculate_tmb(vcf_path, bed_paths, dest_dir_path='.', bedtools='bedtools',
     beds = [Path(p).resolve() for p in bed_paths]
     for bed in beds:
         assert bed.is_file(), f'file not found: {bed}'
-    output_tsv = Path(dest_dir_path).resolve().joinpath(
+    output_alt_tsv = Path(dest_dir_path).resolve().joinpath(
         '.'.join([
             re.sub(r'\.(gz|bz2|bgz)', '', Path(vcf_path).name),
             ('' if min_af is None and max_af is None else str(sample_name)),
             '_n_'.join([
-                '{0}{1:0>2}'.format(k, int(v * 100)) for k, v
+                '{0}{1:0>3}'.format(k, int(v * 1000)) for k, v
                 in [('min_af', min_af), ('max_af', max_af)] if v is not None
             ]),
-            'tmber.tsv'
+            'alt.tsv'
         ])
     )
-    output_tsv_columns = [
-        'bed_name', 'bed_size', 'variant_type', 'ref', 'alt', 'observed_count'
-    ]
+    output_tmb_tsv = output_alt_tsv.parent.joinpath(
+        Path(output_alt_tsv.stem).stem + '.tmb.tsv'
+    )
     df_vcf = read_vcf(
         path=str(vcf), sample_name=sample_name, min_af=min_af, max_af=max_af,
         include_filtered=include_filtered, bgzip=bgzip, n_cpu=n_cpu
     )
     logger.debug(f'df_vcf:{os.linesep}{df_vcf}')
-    if df_vcf.shape[0] == 0:
-        df_tmb = pd.DataFrame(column=output_tsv_columns).set_index(
-            output_tsv_columns[:-1]
+    bed_dfs = dict()
+    df_size = pd.DataFrame(columns=['bed_name', 'bed_size'])
+    for b in beds:
+        df_bed = read_bed(path=str(b), merge=True, bedtools=bedtools)
+        logger.debug(f'df_bed:{os.linesep}{df_bed}')
+        assert df_bed.shape[0] > 0
+        bed_dfs[b.name] = df_bed
+        bed_size = (df_bed['chromEnd'] - df_bed['chromStart']).sum()
+        logger.debug(f'bed_size: {bed_size}')
+        assert bed_size > 0
+        df_size = df_size.append(
+            pd.DataFrame([{'bed_name': b.name, 'bed_size': bed_size}])
         )
+    logger.debug(f'df_size:{os.linesep}{df_size}')
+    if df_vcf.shape[0] == 0:
+        logger.info('No variant detected.')
+        df_var = pd.DataFrame(
+            column=[
+                'bed_name', 'bed_size', 'variant_type', 'ref', 'alt',
+                'observed_alt_count'
+            ]
+        ).set_index(['bed_name', 'bed_size', 'variant_type', 'ref', 'alt'])
     else:
-        df_alt = df_vcf.assign(
+        df_var = df_vcf.assign(
             chrom=lambda d: d['CHROM'].str.replace(
                 r'^(chr|)', 'chr', regex=True, flags=re.IGNORECASE
             ),
@@ -61,33 +79,48 @@ def calculate_tmb(vcf_path, bed_paths, dest_dir_path='.', bedtools='bedtools',
         ).rename(
             columns={'POS': 'pos_start', 'REF': 'ref', 'ALT': 'alt'}
         )[['chrom', 'pos_start', 'pos_end', 'ref', 'alt']].drop_duplicates()
-        logger.debug(f'df_alt:{os.linesep}{df_alt}')
+        logger.debug(f'df_var:{os.linesep}{df_var}')
         fs = list()
         with ProcessPoolExecutor(max_workers=n_cpu) as x:
-            for bed in beds:
-                df_bed = read_bed(path=str(bed), merge=True, bedtools=bedtools)
-                logger.debug(f'df_bed:{os.linesep}{df_bed}')
-                assert df_bed.shape[0] > 0
-                fs.append(x.submit(_tally_alt, df_alt, df_bed, bed.name))
+            fs = [
+                x.submit(_tally_alt, df_var, v, k) for k, v in bed_dfs.items()
+            ]
             f_results = [f.result() for f in as_completed(fs)]
-        df_tmb = pd.concat(
+        df_alt = pd.concat(
             f_results, ignore_index=True, sort=False
         ).assign(
             variant_type=lambda d: d[['ref', 'alt']].apply(
                 lambda r: _determine_sequence_ontology(ref=r[0], alt=r[1]),
                 axis=1
             )
+        ).pipe(
+            lambda d: d.merge(df_size, on='bed_name', how='left')
         ).set_index([
             'bed_name', 'bed_size', 'variant_type', 'ref', 'alt'
         ]).sort_index()
+    logger.debug(f'df_alt:{os.linesep}{df_alt}')
+    print_log(f'Write a TSV file:\t{output_alt_tsv}')
+    df_alt.to_csv(output_alt_tsv, sep='\t')
+    df_tmb = df_alt.reset_index().pipe(
+        lambda d: d[
+            ~d['variant_type'].isin({'no_sequence_alteration', ''})
+        ][['bed_name', 'bed_size', 'observed_alt_count']].append(
+            df_size.assign(observed_alt_count=0)
+        )
+    ).groupby([
+        'bed_name', 'bed_size'
+    ])['observed_alt_count'].sum().to_frame().reset_index().assign(
+        mutations_per_mb=lambda d:
+        (d['observed_alt_count'] / d['bed_size'] * 1000000)
+    ).set_index(['bed_name', 'bed_size'])
     logger.debug(f'df_tmb:{os.linesep}{df_tmb}')
-    print_log(f'Write a TSV file:\t{output_tsv}')
-    df_tmb.to_csv(output_tsv, sep='\t')
+    print_log(f'Write a TSV file:\t{output_tmb_tsv}')
+    df_tmb.to_csv(output_tmb_tsv, sep='\t')
 
 
-def _tally_alt(df_alt, df_bed, bed_name):
-    return df_alt[
-        df_alt[['chrom', 'pos_start', 'pos_end']].apply(
+def _tally_alt(df_var, df_bed, bed_name):
+    return df_var[
+        df_var[['chrom', 'pos_start', 'pos_end']].apply(
             lambda r: (
                 (df_bed['chrom'] == r[0])
                 & (df_bed['chromStart'] < r[1])
@@ -96,11 +129,8 @@ def _tally_alt(df_alt, df_bed, bed_name):
             axis=1
         )
     ].groupby(['ref', 'alt']).size().to_frame(
-        name='observed_count'
-    ).reset_index().assign(
-        bed_name=bed_name,
-        bed_size=(df_bed['chromEnd'] - df_bed['chromStart']).sum()
-    )
+        name='observed_alt_count'
+    ).reset_index().assign(bed_name=bed_name)
 
 
 def _determine_sequence_ontology(ref, alt):

@@ -10,7 +10,7 @@ Installation
 ------------
 
 ```sh
-$ pip install -U tmber
+$ pip install -U https://github.com/dceoy/tmber/archive/main.tar.gz
 ```
 
 Dependent commands:

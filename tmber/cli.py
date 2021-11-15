@@ -13,7 +13,7 @@ Usage:
 
 Commands:
     bed                 Identify regions consisting of target letters in FASTA
-    tmb                 Calculate variant counts on a BED resion
+    tmb                 Tally variants and calculate TMB on a BED resion
 
 Options:
     -h, --help          Print help and exit
@@ -62,6 +62,7 @@ def main():
     logger = logging.getLogger(__name__)
     logger.debug(f'args:{os.linesep}{args}')
     n_cpu = int(args['--cpus'] or cpu_count())
+    logger.info(f'n_cpu: {n_cpu}')
     if args['bed']:
         create_bed_from_fa(
             fa_path=args['<fa_path>'], dest_dir_path=args['--dest-dir'],
