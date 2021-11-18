@@ -103,7 +103,7 @@ def calculate_tmb(vcf_path, bed_paths, dest_dir_path='.', bedtools='bedtools',
     df_alt.to_csv(output_alt_tsv, sep='\t')
     df_tmb = df_alt.reset_index().pipe(
         lambda d: d[
-            ~d['variant_type'].isin({'no_sequence_alteration', ''})
+            d['variant_type'] != 'no_sequence_alteration'
         ][['bed_name', 'bed_size', 'observed_alt_count']].append(
             df_size.assign(observed_alt_count=0)
         )
@@ -158,7 +158,7 @@ def _determine_sequence_ontology(ref, alt):
             return 'deletion'
         elif ref[0] == alt0[0] and len(ref) == 1 and len(alt0) > 1:
             return 'insertion'
-        elif len(ref) > 1 and len(alt0) > 1:
+        elif len(ref) >= 1 and len(alt0) >= 1:
             return 'delins'
         else:
-            return ''
+            raise ValueError(f'unsupported REF/ALT: "{ref}" / "{alt}"')
