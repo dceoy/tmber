@@ -20,7 +20,8 @@ def create_bed_from_fa(fa_path, dest_dir_path, bgzip='bgzip',
     assert fa.is_file(), f'file not found: {fa}'
     bed = Path(dest_dir_path).resolve().joinpath(
         re.sub(r'\.(gz|bz2|bgz)', '', Path(fa_path).name)
-        + '.' + ''.join(target_letter_set) + '.bed'
+        + ('.autosome.' if human_autosome else '.')
+        + ''.join(sorted(list(target_letter_set))) + '.bed'
     )
     autosomes = {f'chr{i}' for i in range(1, 23)}
     fs = list()
