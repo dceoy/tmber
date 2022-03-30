@@ -50,9 +50,9 @@ def calculate_tmb(vcf_path, bed_paths, dest_dir_path='.', bedtools='bedtools',
         bed_size = (df_bed['chromEnd'] - df_bed['chromStart']).sum()
         logger.debug(f'bed_size: {bed_size}')
         assert bed_size > 0
-        df_size = df_size.append(
-            pd.DataFrame([{'bed_name': b.name, 'bed_size': bed_size}])
-        )
+        df_size = pd.concat([
+            df_size, pd.DataFrame([{'bed_name': b.name, 'bed_size': bed_size}])
+        ])
     logger.debug(f'df_size:{os.linesep}{df_size}')
     if df_vcf.shape[0] == 0:
         logger.info('No variant detected.')
@@ -102,11 +102,12 @@ def calculate_tmb(vcf_path, bed_paths, dest_dir_path='.', bedtools='bedtools',
     print_log(f'Write a TSV file:\t{output_alt_tsv}')
     df_alt.to_csv(output_alt_tsv, sep='\t')
     df_tmb = df_alt.reset_index().pipe(
-        lambda d: d[
-            d['variant_type'] != 'no_sequence_alteration'
-        ][['bed_name', 'bed_size', 'observed_alt_count']].append(
+        lambda d: pd.concat([
+            d[
+                d['variant_type'] != 'no_sequence_alteration'
+            ][['bed_name', 'bed_size', 'observed_alt_count']],
             df_size.assign(observed_alt_count=0)
-        )
+        ])
     ).groupby([
         'bed_name', 'bed_size'
     ])['observed_alt_count'].sum().to_frame().reset_index().assign(
