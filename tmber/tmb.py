@@ -105,15 +105,30 @@ def calculate_tmb(vcf_path, bed_paths, dest_dir_path='.', bedtools='bedtools',
         lambda d: pd.concat([
             d[
                 d['variant_type'] != 'no_sequence_alteration'
-            ][['bed_name', 'bed_size', 'observed_alt_count']],
-            df_size.assign(observed_alt_count=0)
+            ][['bed_name', 'bed_size', 'variant_type', 'observed_alt_count']],
+            *[
+                df_size.assign(variant_type=t, observed_alt_count=0) for t in [
+                    'SNV', 'deletion', 'insertion', 'delins',
+                    'structural_variant', 'duplication', 'inversion',
+                    'copy_number_variation'
+                ]
+            ]
         ])
     ).groupby([
-        'bed_name', 'bed_size'
-    ])['observed_alt_count'].sum().to_frame().reset_index().assign(
+        'bed_name', 'bed_size', 'variant_type'
+    ])['observed_alt_count'].sum().to_frame().reset_index().pipe(
+        lambda d: pd.concat([
+            d,
+            d.groupby([
+                'bed_name', 'bed_size'
+            ])['observed_alt_count'].sum().to_frame().assign(
+                variant_type='total'
+            ).reset_index()[d.columns]
+        ])
+    ).assign(
         mutations_per_mb=lambda d:
         (d['observed_alt_count'] / d['bed_size'] * 1000000)
-    ).set_index(['bed_name', 'bed_size'])
+    ).set_index(['bed_name', 'bed_size', 'variant_type'])
     logger.debug(f'df_tmb:{os.linesep}{df_tmb}')
     print_log(f'Write a TSV file:\t{output_tmb_tsv}')
     df_tmb.to_csv(output_tmb_tsv, sep='\t')
